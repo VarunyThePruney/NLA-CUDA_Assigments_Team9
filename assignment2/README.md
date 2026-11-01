@@ -1,4 +1,4 @@
-# Cholesky Factorization - OpenMP
+# Cholesky Factorization
 
 SE24UCSE242 - Varun Sai Golakoti  
 SE24UCSE244 - Konakalla Sai Shloka
@@ -63,9 +63,11 @@ The number of threads is controlled using:
 
 &emsp;&emsp;&emsp;&emsp;omp_set_num_threads(threads[t]);
 
-This allows us to test the same factorization using 2, 4, 8 and 16 threads without changing the actual Cholesky logic.
+This allows us to test the same factorization using 2, 4, 8 and 16 threads without changing the actual cholesky logic.
 
 <h3>Timing and Results:</h3>
+
+We wrote most of this code before Praveen sir discussed cudaEventTimers in class, so we used gettimeofday() to track the times needed as per the assignemnt.
 
 Before calling cholesky(), the starting time is recorded. After the function finishes, the elapsed time is calculated and stored in runtime[t].
 
@@ -78,3 +80,7 @@ This value is stored as TCPU_best.
 Finally, the program writes the matrix name, matrix order, thread count, individual runtime (Tp) and best runtime (TCPU_best) into results_parallel.csv.
 
 The CSV contains 12 rows in total, with 4 thread configurations for each of the 3 matrix sizes.
+
+<h3>Verification and Comparison:</h3>
+
+<h3>Comparing Cholesky to Gaussian method</h3>
