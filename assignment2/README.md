@@ -5,13 +5,15 @@ SE24UCSE244 - Konakalla Sai Shloka
 
 ---
 
+https://github.com/VarunyThePruney/NLA-CUDA_Assigment1/tree/main/assignment2
+
 # Cholesky Factorization:
 
 Cholesky factorization consists of 2 main loops:
 
 1. **Sizes Loop:** Iterates 3 times for 1024x1024, 2048x2048 and 4096x4096 matrices. It reads the matrix from the input files using readMatrix() and allocates memory for the resulting lower triangular matrix l. This loop also handles the final output of the best runtime for each matrix.
 
-2. **Threads Loop:** Iterates 4 times for 2, 4, 8 and 16 threads. For each thread option, a new lower triangular matrix l is initialized using calloc(). Then, omp_set_num_threads() sets the number of threads to be used by OpenMP. The cholesky() function is called and its runtime is recorded as Tp. After all four thread options finish, the lowest runtime is found and stored as TCPU_best. Finally, the results are written to results_parallel.csv.
+2. **Threads Loop:** Iterates 4 times for 2, 4, 8 and 16 threads. For each thread option, a new lower triangular matrix l is initialized using calloc(). Then, omp_set_num_threads() sets the number of threads to be used. The cholesky() function is called and its runtime is recorded as Tp. After all four thread options finish, the lowest runtime is found and stored as TCPU_best. Finally, the results are written to results_parallel.csv.
 
 <h3>Reading Matrix:</h3>
 
@@ -43,11 +45,11 @@ Next, all elements below the diagonal in the current column are calculated using
 
 Here, i represents each row below the current diagonal, while j calculates the summation using previously computed elements.
 
-<h3>OpenMP Logic:</h3>
+<h3>Parallel CPU Logic:</h3>
 
 The main difference between the sequential and parallel versions is how the rows below the diagonal are processed.
 
-Instead of using a normal loop to calculate each row one after another, we use OpenMP:
+Instead of using a normal loop to calculate each row one after another, we use multithreading:
 
 &emsp;&emsp;&emsp;&emsp;#pragma omp parallel for
 
@@ -57,7 +59,7 @@ OpenMP automatically distributes these loop iterations among the available threa
 
 The inner j loop remains sequential because every element requires the summation of previously calculated values.
 
-Once all threads finish calculating the current column, OpenMP automatically waits for them before continuing to the next iteration of k. This is important because the next column depends on the values calculated in the previous column.
+Once all threads finish calculating the current column, and automatically waits for them before continuing to the next iteration of k. This is important because the next column depends on the values calculated in the previous column.
 
 The number of threads is controlled using:
 
@@ -82,5 +84,11 @@ Finally, the program writes the matrix name, matrix order, thread count, individ
 The CSV contains 12 rows in total, with 4 thread configurations for each of the 3 matrix sizes.
 
 <h3>Verification and Comparison:</h3>
+The results show that the parallel CPU implementation performs better than the sequential CPU implementation across all three matrix sizes. The best parallel CPU performance is consistently achieved using 2 threads, with average execution times of 0.4470 seconds, 3.7734 seconds and 29.1964 seconds for matrix sizes 1024x1024, 2048x2048 and 4096x4096, respectively. Compared to the sequential CPU averages of 0.5975 seconds, 4.8585 seconds and 39.0045 seconds, this provides a modest improvement in execution time.
+
+One thing I did notice that I did not expect is that increasing threads increased the time for parallel CPU. This might be a mistake in how I built the code but my guess is that the synchronization for cholesky has high overhead.
+
+The GPU implementation achieves significantly lower execution times, with averages of 0.1143 seconds, 0.4438 seconds and 2.0462 seconds for the three matrix sizes. However, the T(end to end) the averages increase to 0.4980 seconds, 0.9407 seconds and 4.0427 seconds. For the 1024x1024 matrix, the end-to-end GPU time is only slightly better than the best parallel CPU time. For the 2048x2048 and 4096x4096 matrices, the GPU provides a much greater improvement since it has faster working speed.
 
 <h3>Comparing Cholesky to Gaussian method</h3>
+Comparing the two, they have around equal results for the 2048x2048, with gaussian being around 1.36x faster. Which doesn't make sense as Cholesky requires less arithmatic operations due to the symmetric input. This may just be due to the implementation or some other external factor im missing. But by theory, gaussian elimination should be slower than cholesky, but by output, gaussian was faster.
