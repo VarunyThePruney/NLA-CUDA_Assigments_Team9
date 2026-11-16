@@ -1,0 +1,173 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <cuda_runtime.h>
+#include <math.h>
+
+void readMatrix(char *filename, double **a, int *n)
+{
+    FILE *file = fopen(filename, "r");
+    fscanf(file, "%d", n);
+
+    int size = (*n) * (*n);
+    *a = (double *)malloc(size * sizeof(double));
+
+    for (int i = 0; i < size; i++)
+    {
+        fscanf(file, "%lf", &(*a)[i]);
+    }
+
+    fclose(file);
+}
+
+__global__ void gaussSeidel(double *A, double *b, double *x, int n)
+{
+    if (blockIdx.x == 0 && threadIdx.x == 0)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            double sum = b[i];
+
+            for (int j = 0; j < n; j++)
+            {
+                if (j != i)
+                {
+                    sum -= A[i * n + j] * x[j];
+                }
+            }
+
+            x[i] = sum / A[i * n + i];
+        }
+    }
+}
+
+int main()
+{
+    char *filenames[] = {"Cholesky_Input_1024x1024.txt", "Cholesky_Input_2048x2048.txt", "Cholesky_Input_4096x4096.txt"};
+
+    int blocks[] = {4, 8, 16, 32};
+    int threads[] = {32, 64, 128, 256};
+
+    FILE *file = fopen("results_gpu_seidel.csv", "a+");
+
+    int run = 1;
+    char line[1024];
+
+    rewind(file);
+
+    while (fgets(line, sizeof(line), file))
+    {
+        int currentRun;
+
+        if (sscanf(line, "%d,", &currentRun) == 1)
+        {
+            if (currentRun >= run)
+            {
+                run = currentRun + 1;
+            }
+        }
+    }
+
+    fseek(file, 0, SEEK_END);
+
+    if (ftell(file) == 0)
+    {
+        fprintf(file, "Run,N,Blocks,Threads,Iterations,TGPU\n");
+    }
+
+    for (int s = 0; s < 3; s++)
+    {
+        double *A;
+        int n;
+
+        readMatrix(filenames[s], &A, &n);
+
+        int size = n * n;
+
+        double *b = (double *)malloc(n * sizeof(double));
+        double *x = (double *)malloc(n * sizeof(double));
+        double *x_new = (double *)malloc(n * sizeof(double));
+
+        for (int i = 0; i < n; i++)
+        {
+            b[i] = 1;
+            x[i] = 0;
+        }
+
+        double *d_A, *d_b, *d_x;
+
+        cudaMalloc(&d_A, size * sizeof(double));
+        cudaMalloc(&d_b, n * sizeof(double));
+        cudaMalloc(&d_x, n * sizeof(double));
+
+        cudaMemcpy(d_A, A, size * sizeof(double), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_b, b, n * sizeof(double), cudaMemcpyHostToDevice);
+
+        for (int c = 0; c < 4; c++)
+        {
+            int B = blocks[c];
+            int T = threads[c];
+
+            cudaEvent_t start, stop;
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+
+            int iterations = 0;
+            double maxDiff;
+            float gpuTime = 0;
+            cudaMemcpy(d_x, x, n * sizeof(double), cudaMemcpyHostToDevice);
+
+            while (1)
+            {
+                cudaMemcpy(x_new, d_x, n * sizeof(double), cudaMemcpyDeviceToHost);
+                cudaEventRecord(start);
+
+                gaussSeidel<<<B, T>>>(d_A, d_b, d_x, n);
+
+                cudaEventRecord(stop);
+                cudaEventSynchronize(stop);
+                float elapsed;
+                cudaEventElapsedTime(&elapsed, start, stop);
+                gpuTime += elapsed / 1000.0;
+                cudaMemcpy(x, d_x, n * sizeof(double), cudaMemcpyDeviceToHost);
+
+                maxDiff = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    double diff = fabs(x[i] - x_new[i]);
+                    if (diff > maxDiff)
+                    {
+                        maxDiff = diff;
+                    }
+                }
+                iterations++;
+                if (maxDiff < 1e-6)
+                {
+                    break;
+                }
+                        }
+            printf("N = %d, Blocks = %d, Threads = %d\n", n, B, T);
+            printf("Iterations = %d\n", iterations);
+            printf("TGPU = %.6f seconds\n\n", gpuTime);
+            fprintf(file, "%d,%d,%d,%d,%d,%.6f\n", run, n, B, T, iterations, gpuTime);
+
+            fflush(file);
+
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+
+            for (int i = 0; i < n; i++)
+            {
+                x[i] = 0;
+            }
+        }
+        cudaFree(d_A);
+        cudaFree(d_b);
+        cudaFree(d_x);
+
+        free(A);
+        free(b);
+        free(x);
+        free(x_new);
+    }
+    fclose(file);
+}

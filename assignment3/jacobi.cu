@@ -1,9 +1,7 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <cuda_runtime.h>
 #include <math.h>
-#include <sys/time.h>
 
 void readMatrix(char *filename, double **a, int *n)
 {
@@ -21,18 +19,10 @@ void readMatrix(char *filename, double **a, int *n)
     fclose(file);
 }
 
-double getTime()
-{
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    return t.tv_sec * 1000.0 + t.tv_usec / 1000.0;
-}
-
 __global__ void jacobi(double *A, double *b, double *x,
                        double *x_new, int n)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-
     int stride = blockDim.x * gridDim.x;
 
     for (; i < n; i += stride)
@@ -58,13 +48,12 @@ int main()
     int blocks[] = {4, 8, 16, 32};
     int threads[] = {32, 64, 128, 256};
 
-    FILE *file = fopen("results_jacobi_gpu.csv", "a+");
+    FILE *file = fopen("results_gpu_jacobi.csv", "a+");
 
     int run = 1;
+    char line[1024];
 
     rewind(file);
-
-    char line[1024];
 
     while (fgets(line, sizeof(line), file))
     {
@@ -83,7 +72,7 @@ int main()
 
     if (ftell(file) == 0)
     {
-        fprintf(file, "Run,N,Blocks,Threads,Iterations,TGPU,Te2e\n");
+        fprintf(file, "Run,N,Blocks,Threads,Iterations,TGPU\n");
     }
 
     for (int s = 0; s < 3; s++)
@@ -120,17 +109,14 @@ int main()
             int B = blocks[c];
             int T = threads[c];
 
-            cudaMemcpy(d_x, x, n * sizeof(double), cudaMemcpyHostToDevice);
-
             cudaEvent_t start, stop;
             cudaEventCreate(&start);
             cudaEventCreate(&stop);
 
             int iterations = 0;
             double maxDiff;
-            double gpuTime = 0;
-
-            double startTime = getTime();
+            float gpuTime = 0;
+            cudaMemcpy(d_x, x, n * sizeof(double), cudaMemcpyHostToDevice);
 
             while (1)
             {
@@ -140,32 +126,24 @@ int main()
 
                 cudaEventRecord(stop);
                 cudaEventSynchronize(stop);
-
                 float elapsed;
                 cudaEventElapsedTime(&elapsed, start, stop);
-
-                gpuTime += elapsed;
-
+                gpuTime += elapsed / 1000.0;
                 cudaMemcpy(x_new, d_x_new, n * sizeof(double), cudaMemcpyDeviceToHost);
 
                 maxDiff = 0;
-
                 for (int i = 0; i < n; i++)
                 {
                     double diff = fabs(x_new[i] - x[i]);
-
                     if (diff > maxDiff)
                     {
                         maxDiff = diff;
                     }
                 }
-
                 iterations++;
-
                 double *temp = x;
                 x = x_new;
                 x_new = temp;
-
                 double *d_temp = d_x;
                 d_x = d_x_new;
                 d_x_new = d_temp;
@@ -176,16 +154,10 @@ int main()
                 }
             }
 
-            double endTime = getTime();
-            double totalTime = endTime - startTime;
-
             printf("N = %d, Blocks = %d, Threads = %d\n", n, B, T);
             printf("Iterations = %d\n", iterations);
-            printf("GPU Time = %.4f ms\n", gpuTime);
-            printf("Total Time = %.4f ms\n\n", totalTime);
-
-            fprintf(file, "%d,%d,%d,%d,%d,%.4f,%.4f\n",
-                    run, n, B, T, iterations, gpuTime, totalTime);
+            printf("TGPU = %.6f seconds\n\n", gpuTime);
+            fprintf(file, "%d,%d,%d,%d,%d,%.6f\n", run, n, B, T, iterations, gpuTime);
 
             fflush(file);
 
@@ -208,8 +180,5 @@ int main()
         free(x);
         free(x_new);
     }
-
     fclose(file);
-
-    return 0;
 }
