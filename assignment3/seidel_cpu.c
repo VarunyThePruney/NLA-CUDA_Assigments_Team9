@@ -49,7 +49,7 @@ int main()
 {
     char *filenames[] = {"Cholesky_Input_1024x1024.txt", "Cholesky_Input_2048x2048.txt", "Cholesky_Input_4096x4096.txt"};
 
-    FILE *file = fopen("results_cpu_gauss.csv", "a+");
+    FILE *file = fopen("results_cpu_seidel.csv", "a+");
 
     int run = 1;
     char line[1024];
@@ -73,7 +73,7 @@ int main()
 
     if (ftell(file) == 0)
     {
-        fprintf(file, "Run,N,Iterations,TCPU(s)\n");
+        fprintf(file, "Run,N,Iterations,TCPU\n");
     }
 
     for (int s = 0; s < 3; s++)

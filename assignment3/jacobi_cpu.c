@@ -74,7 +74,7 @@ int main()
 
     if (ftell(file) == 0)
     {
-        fprintf(file, "Run,N,Iterations,TCPU(s)\n");
+        fprintf(file, "Run,N,Iterations,TCPU\n");
     }
 
     for (int s = 0; s < 3; s++)
